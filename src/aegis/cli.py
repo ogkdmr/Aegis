@@ -354,17 +354,17 @@ def cmd_bench(args) -> None:
         if args.conda_env:
             env_export = f"export HF_TOKEN={shlex.quote(hf_token)}" if hf_token else ""
             activate = f"source {args.conda_env}/bin/activate"
-            parts = [p for p in [activate, env_export, cmd_str] if p]
+            parts = [p for p in [activate, env_export, "export HF_HUB_OFFLINE=1", cmd_str] if p]
             rank_cmd = ["bash", "-c", " && ".join(parts)]
         elif args.apptainer_image:
             image_basename = os.path.basename(args.apptainer_image)
             env_export = f"export HF_TOKEN={shlex.quote(hf_token)}" if hf_token else ""
             apptainer_cmd = f"apptainer exec /tmp/{image_basename} {cmd_str}"
-            parts = [p for p in [env_export, apptainer_cmd] if p]
+            parts = [p for p in [env_export, "export HF_HUB_OFFLINE=1", apptainer_cmd] if p]
             rank_cmd = ["bash", "-c", " && ".join(parts)]
         else:
             env_export = f"export HF_TOKEN={shlex.quote(hf_token)}" if hf_token else ""
-            parts = [p for p in ["module load frameworks", env_export, cmd_str] if p]
+            parts = [p for p in ["module load frameworks", env_export, "export HF_HUB_OFFLINE=1", cmd_str] if p]
             rank_cmd = ["bash", "-l", "-c", " && ".join(parts)]
         env_flags = ["-env", "HF_TOKEN", hf_token] if hf_token else []
         mpi_cmd.extend([
