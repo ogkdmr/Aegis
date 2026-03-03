@@ -70,7 +70,6 @@ numactl --cpunodebind=0 --membind=0 vllm serve {{ model }} \
     --port {{ port }} \
     --enforce-eager \
     --distributed-executor-backend mp \
-    --trust-remote-code \
 {% for arg in extra_vllm_args %}    {{ arg }} \
 {% endfor %}
 
