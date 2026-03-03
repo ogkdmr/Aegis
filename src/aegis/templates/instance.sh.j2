@@ -29,7 +29,6 @@ export VLLM_DISABLE_SINKS=1
 export VLLM_CACHE_ROOT="/tmp/hf_home/vllm_cache"
 export HF_DATASETS_CACHE="/tmp/hf_home"
 export HF_MODULES_CACHE="/tmp/hf_home"
-export HF_HUB_OFFLINE=1
 {% elif apptainer_image %}
 module load apptainer
 LIBFABRIC_PREFIX=$(pkg-config libfabric --variable=prefix)
@@ -45,11 +44,11 @@ export VLLM_DISABLE_SINKS=1
 export VLLM_CACHE_ROOT="/tmp/hf_home/vllm_cache"
 export HF_DATASETS_CACHE="/tmp/hf_home"
 export HF_MODULES_CACHE="/tmp/hf_home"
-export HF_HUB_OFFLINE=1
 {% else %}
 module load frameworks
 export CCL_PROCESS_LAUNCHER=torchrun
 {% endif %}
+export HF_HUB_OFFLINE=1
 export TMPDIR=/tmp
 export VLLM_HOST_IP=$(getent hosts $(hostname).hsn.cm.aurora.alcf.anl.gov | awk '{ print $1 }' | tr ' ' '\n' | sort | head -n 1)
 
