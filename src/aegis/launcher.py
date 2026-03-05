@@ -222,6 +222,7 @@ def _wait_for_instances(
 
     while time.monotonic() < deadline:
         cycle += 1
+        newly_ready = []
         for node, port in endpoints:
             if (node, port) in ready:
                 continue
@@ -232,21 +233,28 @@ def _wait_for_instances(
                         elapsed = time.monotonic() - start
                         ready.add((node, port))
                         ready_times[(node, port)] = elapsed
-                        print(
-                            f"Instance {node}:{port} is ready in {elapsed:.1f}s "
-                            f"({len(ready)}/{len(endpoints)})",
-                            file=sys.stderr,
-                        )
+                        newly_ready.append((node, port, elapsed))
             except (urllib.error.URLError, OSError) as exc:
                 reason = getattr(exc, "reason", exc)
-                print(
-                    f"[poll {cycle}] {node}:{port} not ready: {reason}",
-                    file=sys.stderr,
-                )
+                _vlog(f"  [poll {cycle}] {node}:{port} not ready: {reason}")
+
+        for node, port, elapsed in newly_ready:
+            print(
+                f"Instance {node}:{port} ready in {elapsed:.1f}s "
+                f"({len(ready)}/{len(endpoints)})",
+                file=sys.stderr,
+            )
 
         if len(ready) == len(endpoints):
             break
 
+        pending = len(endpoints) - len(ready)
+        elapsed_total = time.monotonic() - start
+        print(
+            f"[poll {cycle}] {len(ready)}/{len(endpoints)} ready, "
+            f"{pending} pending ({elapsed_total:.0f}s elapsed)",
+            file=sys.stderr,
+        )
         time.sleep(poll_interval)
 
     not_ready = [(n, p) for n, p in endpoints if (n, p) not in ready]
