@@ -216,7 +216,7 @@ def _format_services(services, fmt: str) -> str:
 
 
 def cmd_registry_list(args) -> None:
-    client = ServiceRegistryClient(host=args.registry_host, port=args.registry_port)
+    client = _registry_client(args)
     services = client.list_services(
         service_type=args.type,
         status_filter=args.status,
@@ -225,7 +225,7 @@ def cmd_registry_list(args) -> None:
 
 
 def cmd_registry_get(args) -> None:
-    client = ServiceRegistryClient(host=args.registry_host, port=args.registry_port)
+    client = _registry_client(args)
     service = client.get_service(args.service_id)
     if service is None:
         print(f"Service '{args.service_id}' not found.", file=sys.stderr)
@@ -237,7 +237,7 @@ def cmd_registry_get(args) -> None:
 
 
 def cmd_registry_list_healthy(args) -> None:
-    client = ServiceRegistryClient(host=args.registry_host, port=args.registry_port)
+    client = _registry_client(args)
     services = client.get_healthy_services(
         service_type=args.type,
         timeout_seconds=args.timeout,
@@ -246,13 +246,17 @@ def cmd_registry_list_healthy(args) -> None:
 
 
 def cmd_registry_count(args) -> None:
-    client = ServiceRegistryClient(host=args.registry_host, port=args.registry_port)
+    client = _registry_client(args)
     count = client.get_service_count(service_type=args.type)
     print(count)
 
 
 def _add_registry_args(parser: argparse.ArgumentParser) -> None:
-    """Add --registry-host and --registry-port to a registry sub-parser."""
+    """Add --registry-url / --registry-host / --registry-port to a registry sub-parser."""
+    parser.add_argument(
+        "--registry-url", type=str, default=None,
+        help="Registry URL, e.g. http://node01:8471 (overrides --registry-host/--registry-port)",
+    )
     parser.add_argument(
         "--registry-host", type=str, default="localhost",
         help="Hostname of the registry server, typically the first PBS node (default: localhost)",
@@ -265,6 +269,15 @@ def _add_registry_args(parser: argparse.ArgumentParser) -> None:
         "--format", choices=["text", "json"], default="text",
         help="Output format (default: text)",
     )
+
+
+def _registry_client(args) -> ServiceRegistryClient:
+    """Build a ServiceRegistryClient from --registry-url or --registry-host/--registry-port."""
+    if getattr(args, "registry_url", None):
+        from urllib.parse import urlparse
+        parsed = urlparse(args.registry_url)
+        return ServiceRegistryClient(host=parsed.hostname, port=parsed.port)
+    return ServiceRegistryClient(host=args.registry_host, port=args.registry_port)
 
 
 # ---------------------------------------------------------------------------
@@ -303,8 +316,8 @@ def _parse_bench_results(result_dir: str) -> list[dict]:
 def cmd_bench(args) -> None:
     """Benchmark launched vLLM instances via vllm bench serve."""
     # Resolve endpoints
-    if args.registry_host != "localhost":
-        client = ServiceRegistryClient(host=args.registry_host, port=args.registry_port)
+    if getattr(args, "registry_url", None) or args.registry_host != "localhost":
+        client = _registry_client(args)
         services = client.get_healthy_services()
         endpoints = [f"{s.host}:{s.port}" for s in services]
         if not endpoints:
