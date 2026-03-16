@@ -306,6 +306,7 @@ def launch_instances(
     template = env.get_template("instance.sh.j2")
 
     endpoints = []
+    endpoint_models: dict[tuple[str, int], str] = {}
     tmp_files = []
     instance_idx = 0
     node_offset = 0
@@ -334,39 +335,36 @@ def launch_instances(
         for j in range(model_cfg.instances):
             node = nodes[node_offset]
             endpoints.append((node, port))
+            endpoint_models[(node, port)] = model_cfg.model
             all_instance_nodes.append((node, script_file.name, instance_idx))
             _vlog(f"  [instance {instance_idx}] {model_cfg.model} node={node} port={port}")
             instance_idx += 1
             node_offset += 1
 
-    # Single hostfile and single mpiexec across all instances.
-    # All instances use the same port — no conflict since each is on a distinct host.
-    hostfile = tempfile.NamedTemporaryFile(
-        mode="w", suffix=".hosts", prefix="aegis_hosts_",
-        dir=shared_tmpdir, delete=False,
-    )
+    # One mpiexec per model config, each with its own hostfile.
+    # This supports multiple models with different scripts running concurrently.
+    model_nodes: dict[str, list[str]] = {}
     for node, script, _ in all_instance_nodes:
-        hostfile.write(f"{node}\n")
-    hostfile.close()
-    tmp_files.append(hostfile.name)
+        model_nodes.setdefault(script, []).append(node)
 
-    # Verify all instances use the same script (required for flat mpiexec).
-    scripts = {script for _, script, _ in all_instance_nodes}
-    if len(scripts) > 1:
-        print(
-            "Error: multiple model configs require MPMD support (not yet implemented).",
-            file=sys.stderr,
+    for script, nodes_for_model in model_nodes.items():
+        hostfile = tempfile.NamedTemporaryFile(
+            mode="w", suffix=".hosts", prefix="aegis_hosts_",
+            dir=shared_tmpdir, delete=False,
         )
-        sys.exit(1)
+        for node in nodes_for_model:
+            hostfile.write(f"{node}\n")
+        hostfile.close()
+        tmp_files.append(hostfile.name)
 
-    mpi_launch_cmd = [
-        "mpiexec", "-ppn", "1",
-        "--hostfile", hostfile.name,
-        "-o", f"{log_dir}/%r/%h/out.%R",
-        all_instance_nodes[0][1],
-    ]
-    _vlog(f"  [mpiexec] {shlex.join(mpi_launch_cmd)}")
-    proc = subprocess.Popen(mpi_launch_cmd, env=os.environ)
+        mpi_launch_cmd = [
+            "mpiexec", "-ppn", "1",
+            "--hostfile", hostfile.name,
+            "-o", f"{log_dir}/%r/%h/out.%R",
+            script,
+        ]
+        _vlog(f"  [mpiexec] {shlex.join(mpi_launch_cmd)}")
+        subprocess.Popen(mpi_launch_cmd, env=os.environ)
 
     total_instances = instance_idx
     t_wait_start = time.monotonic()
@@ -380,7 +378,8 @@ def launch_instances(
         "--registry-port", str(config.registry_port),
     ]
     for node, port in endpoints:
-        heartbeat_args.append(f"vllm-{node}-{port}:{node}:{port}")
+        model = endpoint_models[(node, port)]
+        heartbeat_args.append(f"vllm-{node}-{port}:{node}:{port}:{model}")
 
     heartbeat_log = open(log_dir / "heartbeat.log", "w")
     _vlog(f"  [heartbeat] {shlex.join(heartbeat_args)}")
