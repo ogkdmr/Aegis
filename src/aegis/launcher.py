@@ -322,6 +322,9 @@ def launch_instances(
             extra_vllm_args=model_cfg.extra_vllm_args,
             conda_env=config.conda_env,
             apptainer_image=config.apptainer_image,
+            modelinfo_cache_script=str(
+                _project_root() / "tools" / "vllm_build_all_modelinfo_caches.py"
+            ),
         )
         script_file = tempfile.NamedTemporaryFile(
             mode="w", suffix=".sh", prefix=f"aegis_model_{model_cfg.model.replace('/', '_')}_",
