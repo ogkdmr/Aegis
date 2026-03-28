@@ -171,6 +171,8 @@ def config_to_yaml(config: AegisConfig) -> str:
     if config.apptainer_image:
         data["apptainer_image"] = config.apptainer_image
 
+    data["endpoints_file"] = config.endpoints_file
+
     # Models list
     models_list = []
     for m in config.models:
