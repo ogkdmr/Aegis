@@ -12,7 +12,17 @@ module load pti-gpu
 module load hdf5
 
 {% if conda_env %}
-mkdir -p /tmp/conda_env && tar -xzf /tmp/{{ conda_env.split('/')[-1] }} -C /tmp/conda_env
+# Serialize conda env extraction across all instances on this node.
+# Without the lock, concurrent tar invocations overwrite each other's files
+# mid-extraction, corrupting tokenizer binaries and causing vLLM panics.
+(
+  flock 9
+  if [ ! -f /tmp/conda_env/.setup_complete ]; then
+    mkdir -p /tmp/conda_env
+    tar -xzf /tmp/{{ conda_env.split('/')[-1] }} -C /tmp/conda_env
+    touch /tmp/conda_env/.setup_complete
+  fi
+) 9>/tmp/conda_env.lock
 set --
 source /tmp/conda_env/bin/activate
 conda-unpack
